@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+python-multipart
+python-dotenv
+requests
+numpy<1.24.0
+opencv-python-headless
+tensorflow==2.10.0
+deepface
+tf-keras
+protobuf==3.19.6
+h5py
+mtcnn

@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Park AI | Dual-Lane System</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* Đã xóa overflow: hidden để cho phép cuộn dọc */
+        body, html { margin: 0; padding: 0; background: #0f172a; color: #fff; font-family: 'Nunito', sans-serif; overflow-x: hidden; overflow-y: auto; }
+        
+        /* Đổi height thành min-height để khung có thể giãn ra, thêm margin-bottom cho thoáng */
+        .dual-container { display: flex; min-height: 550px; gap: 20px; padding: 0 20px; margin-bottom: 20px; }
+        .lane-col { flex: 1; display: flex; flex-direction: column; background: rgba(30, 41, 59, 0.4); border-radius: 20px; padding: 20px; border: 1px solid rgba(255,255,255,0.05); overflow-y: auto; }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; padding: 20px; background: rgba(15, 23, 42, 0.8); border-bottom: 1px solid #334155; }
+        .lane-title { font-size: 1.4rem; font-weight: 800; display: flex; align-items: center; gap: 10px; padding-bottom: 15px; border-bottom: 2px solid; margin-bottom: 15px; }
+        .lane-title.in { color: #10b981; border-bottom-color: #10b981; }
+        .lane-title.out { color: #f43f5e; border-bottom-color: #f43f5e; }
+        .status-pill { padding: 5px 12px; border-radius: 8px; font-weight: 800; font-size: 0.8rem; }
+        .status-pill.success { background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; }
+        .status-pill.danger { background: rgba(244, 63, 94, 0.2); color: #f43f5e; border: 1px solid #f43f5e; }
+        .status-pill.waiting { background: rgba(14, 165, 233, 0.2); color: #38bdf8; border: 1px solid #38bdf8; }
+        
+        /* CSS cho khung bằng chứng mới */
+        .evidence-box { display: flex; gap: 15px; margin-top: 15px; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 12px; border: 1px solid #334155; }
+        .evidence-item { flex: 1; display: flex; flex-direction: column; align-items: center; }
+        /* 2. Đổi cover thành contain để không bị xén mất tóc và cằm */
+        .evidence-img { width: 100%; height: 160px; object-fit: contain; border-radius: 8px; border: 1px solid #38bdf8; background: #000; }
+        .evidence-img.plate { background: #fff; border-color: #10b981; }
+        
+        /* 1. Trả lại chiều cao 450px cho Camera */
+        .cam-container { position: relative; border-radius: 16px; overflow: hidden; background: #000; border: 2px solid #334155; height: 450px; display: flex; justify-content: center; align-items: center; margin-bottom: 15px; }
+        video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        .queue-wrapper { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px; min-height: 40px; }
+        .vehicle-item { background: rgba(15, 23, 42, 0.8); border: 1px solid #38bdf8; padding: 8px 15px; border-radius: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 10px; }
+        .vehicle-item.active { background: rgba(56, 189, 248, 0.2); box-shadow: 0 0 10px rgba(56,189,248,0.5); }
+        
+        .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 12px; }
+        .d-box { display: flex; flex-direction: column; }
+        .d-label { font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; margin-bottom: 4px; }
+        .d-value { font-size: 1.1rem; font-weight: 800; color: #fff; }
+        .plate-format { font-family: 'Courier New', monospace; background: #fff; color: #000; padding: 2px 8px; border-radius: 4px; border: 2px solid #000; width: fit-content; }
+        
+        .fee-box { grid-column: span 2; background: rgba(245, 158, 11, 0.15); border: 1px dashed #f59e0b; padding: 10px; border-radius: 8px; text-align: center; }
+        .fee-amount { font-size: 1.5rem; font-weight: 900; color: #fbbf24; }
+        
+        /* 🔴 BẢN VÁ: Cố định Header Bảng Nhật ký */
+        .global-logs { height: 200px; overflow-y: auto; background: rgba(15, 23, 42, 0.9); border-top: 1px solid #334155; padding: 0 20px; /* Đã xóa padding-top để header dính sát mép */ }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th, td { padding: 12px 8px; text-align: left; border-bottom: 1px solid #334155; }
+        th { 
+            color: #94a3b8; text-transform: uppercase; 
+            position: sticky; top: 0; background: #0f172a; 
+            z-index: 10; /* Ưu tiên nổi lên trên các hàng dữ liệu */
+            box-shadow: 0 1px 0 #334155; /* Vẽ đường kẻ giả dưới header */
+        }
+        
+    /* CSS CHO MODAL VÙNG VÀNG (ĐÃ TỐI ƯU CHO KHUNG CAMERA) */
+    .yz-overlay {
+        display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(15, 23, 42, 0.95); z-index: 1000; justify-content: center; align-items: center;
+        backdrop-filter: blur(5px);
+    }
+    .yz-modal {
+        background: #1e293b; border: 2px solid #f59e0b; border-radius: 12px; padding: 15px;
+        width: 95%; max-height: 95%; overflow-y: auto; text-align: center; box-shadow: 0 0 20px rgba(245, 158, 11, 0.4);
+    }
+    .yz-title { color: #f59e0b; font-size: 1.1rem; font-weight: 900; margin-bottom: 5px; text-transform: uppercase; }
+    .yz-compare-box { display: flex; justify-content: center; gap: 10px; margin: 10px 0; }
+    .yz-img-wrapper { flex: 1; background: #0f172a; padding: 5px; border-radius: 8px; border: 1px solid #334155; }
+    .yz-img-wrapper img { width: 100%; height: 120px; object-fit: contain; border-radius: 6px; }
+    .yz-info { font-size: 0.9rem; margin-bottom: 10px; color: #e2e8f0; }
+    .yz-actions { display: flex; gap: 10px; justify-content: center; }
+    .yz-btn { padding: 8px 10px; border-radius: 6px; font-weight: bold; cursor: pointer; border: none; font-size: 0.85rem; flex: 1; }
+    .btn-approve { background: #10b981; color: white; }
+    .btn-reject { background: #f43f5e; color: white; }
+    .btn-retry { background: #38bdf8; color: white; }
+
+    /* CSS cho Toast Notification và Hiệu ứng Rung cảnh báo */
+    #toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+    .toast-box { display: flex; align-items: center; gap: 15px; padding: 15px 20px; border-radius: 10px; color: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.5); animation: slideInRight 0.3s ease-out forwards; min-width: 320px; }
+    .toast-success { background: rgba(16, 185, 129, 0.95); border-left: 5px solid #047857; }
+    .toast-danger { background: rgba(244, 63, 94, 0.95); border-left: 5px solid #be123c; }
+    .toast-warning { background: rgba(245, 158, 11, 0.95); border-left: 5px solid #b45309; }
+    
+    @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes fadeOutRight { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+
+    /* === HIỆU ỨNG CẢNH BÁO KHẨN CẤP === */
+    @keyframes shake {
+        0%,100% { transform: translateX(0); }
+        10%,50%,90% { transform: translateX(-8px) rotate(-1deg); }
+        30%,70% { transform: translateX(8px) rotate(1deg); }
+    }
+    @keyframes dangerPulse {
+        0%,100% { box-shadow: 0 0 0 0 rgba(244,63,94,0); border-color: #f43f5e; }
+        50% { box-shadow: 0 0 40px 15px rgba(244,63,94,0.7); border-color: #ff0033; }
+    }
+    @keyframes flashOverlay {
+        0%,100% { opacity: 0; }
+        20%,60% { opacity: 1; }
+        40%,80% { opacity: 0.4; }
+    }
+    .shake-danger {
+        animation: shake 0.4s ease-in-out 4, dangerPulse 0.6s ease-in-out 4;
+        border-color: #f43f5e !important;
+        border-width: 3px !important;
+    }
+    /* Flash đỏ toàn màn hình */
+    #alert-flash {
+        position: fixed; inset: 0; pointer-events: none; z-index: 99998;
+        background: rgba(220, 20, 60, 0.35);
+        display: none;
+    }
+    #alert-flash.active { display: block; animation: flashOverlay 0.5s ease-in-out 3; }
+    /* Badge status đỏ đập khi cảnh báo */
+    @keyframes badgeDanger {
+        0%,100% { background: rgba(244,63,94,0.2); }
+        50% { background: rgba(244,63,94,0.8); color: #fff; }
+    }
+    .badge-alert { animation: badgeDanger 0.4s ease-in-out 6 !important; color: #fff !important; border-color: #f43f5e !important; }
+
+    /* CSS Debug Log Panel */
+    #debug-panel { background: rgba(0,0,0,0.85); border-top: 2px solid #334155; padding: 0; }
+    #debug-panel summary { padding: 8px 20px; cursor: pointer; color: #94a3b8; font-size: 0.8rem; font-weight: bold; letter-spacing: 1px; user-select: none; }
+    #debug-panel summary:hover { color: #38bdf8; }
+    #debug-log { height: 130px; overflow-y: auto; padding: 5px 20px 10px; font-family: 'Courier New', monospace; font-size: 0.75rem; }
+    #debug-log .log-line { padding: 2px 0; border-bottom: 1px solid #1e293b; color: #64748b; }
+    #debug-log .log-line.ok { color: #10b981; }
+    #debug-log .log-line.err { color: #f43f5e; }
+    #debug-log .log-line.warn { color: #f59e0b; }
+    #debug-log .log-line.info { color: #38bdf8; }
+    </style>
+</head>
+<body>
+    <!-- Flash đỏ toàn màn hình khi có cảnh báo -->
+    <div id="alert-flash"></div>
+    <div id="toast-container"></div>
+
+    <div class="header-bar">
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <i class="fas fa-shield-halved" style="font-size: 2.2rem; color: #38bdf8; filter: drop-shadow(0 0 10px rgba(56,189,248,0.6));"></i>
+            <div>
+                <h1 style="margin: 0; font-size: 1.8rem; font-weight: 900; background: linear-gradient(90deg, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 8px rgba(56,189,248,0.4)); letter-spacing: 1px;">SMARTPARK AI</h1>
+                <div style="font-size: 0.85rem; color: #cbd5e1; font-weight: 600; letter-spacing: 0.5px;">Dual-Lane Management System</div>
+            </div>
+        </div>
+        <div style="display: flex; gap: 20px;">
+            <div>
+                <label style="font-size: 0.7rem; color: #10b981; display: block; margin-bottom: 2px;">CAMERA LÀN VÀO</label>
+                <select id="cam-in" style="background: #1e293b; color: #fff; border: 1px solid #334155; padding: 5px; border-radius: 5px; max-width: 150px;"></select>
+            </div>
+            <div>
+                <label style="font-size: 0.7rem; color: #f43f5e; display: block; margin-bottom: 2px;">CAMERA LÀN RA</label>
+                <select id="cam-out" style="background: #1e293b; color: #fff; border: 1px solid #334155; padding: 5px; border-radius: 5px; max-width: 150px;"></select>
+            </div>
+            <button onclick="window.resetData()" style="background: #ef4444; color: white; border: none; padding: 0 15px; border-radius: 5px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 8px; align-self: flex-end; height: 30px;" title="Xóa toàn bộ Cư dân và Nhật ký"><i class="fas fa-trash-alt"></i> Xóa Dữ Liệu</button>
+        </div>
+    </div>
+
+    <div class="dual-container">
+        <div class="lane-col" id="col-in">
+            <div class="lane-title in">
+                <i class="fas fa-sign-in-alt"></i> LÀN VÀO (CHECK-IN)
+                <span id="status-badge-IN" class="status-pill waiting" style="margin-left: auto;">SẴN SÀNG</span>
+            </div>
+            <div class="queue-wrapper" id="queue-IN"></div>
+            <div class="cam-container" id="cam-box-IN">
+                <video id="video-IN" autoplay muted playsinline></video>
+                <canvas id="canvas-IN" style="display:none;"></canvas>
+                <div id="reticle-IN" style="position: absolute; width: 200px; height: 200px; border: 2px dashed #10b981; display: none;"></div>
+                <div id="yz-overlay-IN" class="yz-overlay">
+                    <div class="yz-modal">
+                        <div class="yz-title"><i class="fas fa-exclamation-triangle"></i> CẦN XÁC NHẬN - LÀN VÀO</div>
+                        <div class="yz-info">
+                            Chủ xe: <strong id="yz-name-IN" style="color:#38bdf8">---</strong> <br>
+                            Độ tương đồng: <strong id="yz-score-IN" style="color:#f43f5e; font-size: 1.2rem;">0.00</strong>
+                        </div>
+                        <div class="yz-compare-box">
+                            <div class="yz-img-wrapper">
+                                <div style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 5px;">ẢNH CAMERA AI QUÉT</div>
+                                <img id="yz-cam-IN" src="">
+                            </div>
+                            <div class="yz-img-wrapper">
+                                <div style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 5px;">ẢNH ĐỐI CHIẾU HỒ SƠ</div>
+                                <img id="yz-reg-IN" src="" style="background:#1e293b;">
+                            </div>
+                        </div>
+                        <div class="yz-actions">
+                            <button class="yz-btn btn-approve" onclick="handleManual('IN', 'approve')"><i class="fas fa-check"></i> ĐÚNG NGƯỜI</button>
+                            <button class="yz-btn btn-reject" onclick="handleManual('IN', 'reject')"><i class="fas fa-user-plus"></i> TẠO MỚI</button>
+                            <button class="yz-btn btn-retry" onclick="handleManual('IN', 'retry')"><i class="fas fa-redo"></i> QUÉT LẠI</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="detail-grid">
+                <div class="d-box"><span class="d-label">Trạng thái</span><span class="d-value" id="msg-IN" style="color:#38bdf8;">Đang chờ xe...</span></div>
+                <div class="d-box"><span class="d-label">Biển số</span><span class="d-value plate-format" id="plate-IN">---</span></div>
+                <div class="d-box"><span class="d-label">Chủ xe</span><span class="d-value" id="name-IN">---</span></div>
+            </div>
+
+            <div class="evidence-box" id="evidence-box-IN" style="display:none;">
+                <div class="evidence-item">
+                    <span class="d-label">Khuôn mặt</span>
+                    <img id="evidence-face-IN" class="evidence-img" src="">
+                </div>
+                <div class="evidence-item">
+                    <span class="d-label">Biển số</span>
+                    <img id="evidence-plate-IN" class="evidence-img plate" src="">
+                </div>
+            </div>
+        </div>
+
+        <div class="lane-col" id="col-out">
+            <div class="lane-title out">
+                <i class="fas fa-sign-out-alt"></i> LÀN RA (CHECK-OUT)
+                <span id="status-badge-OUT" class="status-pill waiting" style="margin-left: auto;">SẴN SÀNG</span>
+            </div>
+            <div class="queue-wrapper" id="queue-OUT"></div>
+            <div class="cam-container" id="cam-box-OUT">
+                <video id="video-OUT" autoplay muted playsinline></video>
+                <canvas id="canvas-OUT" style="display:none;"></canvas>
+                <div id="reticle-OUT" style="position: absolute; width: 200px; height: 200px; border: 2px dashed #f43f5e; display: none;"></div>
+                <div id="yz-overlay-OUT" class="yz-overlay">
+                    <div class="yz-modal">
+                        <div class="yz-title"><i class="fas fa-exclamation-triangle"></i> CẦN XÁC NHẬN - LÀN RA</div>
+                        <div class="yz-info">
+                            Chủ xe: <strong id="yz-name-OUT" style="color:#38bdf8">---</strong> <br>
+                            Độ tương đồng: <strong id="yz-score-OUT" style="color:#f43f5e; font-size: 1.2rem;">0.00</strong>
+                        </div>
+                        <div class="yz-compare-box">
+                            <div class="yz-img-wrapper">
+                                <div style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 5px;">ẢNH CAMERA AI QUÉT</div>
+                                <img id="yz-cam-OUT" src="">
+                            </div>
+                            <div class="yz-img-wrapper">
+                                <div style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 5px;">ẢNH ĐỐI CHIẾU HỒ SƠ</div>
+                                <img id="yz-reg-OUT" src="" style="background:#1e293b;">
+                            </div>
+                        </div>
+                        <div class="yz-actions">
+                            <button class="yz-btn btn-approve" onclick="handleManual('OUT', 'approve')"><i class="fas fa-check"></i> CHO QUA</button>
+                            <button class="yz-btn btn-reject" onclick="handleManual('OUT', 'reject')"><i class="fas fa-times"></i> TỪ CHỐI</button>
+                            <button class="yz-btn btn-retry" onclick="handleManual('OUT', 'retry')"><i class="fas fa-redo"></i> QUÉT LẠI</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="detail-grid">
+                <div class="d-box"><span class="d-label">Trạng thái</span><span class="d-value" id="msg-OUT" style="color:#38bdf8;">Đang chờ xe...</span></div>
+                <div class="d-box"><span class="d-label">Biển số</span><span class="d-value plate-format" id="plate-OUT">---</span></div>
+                <div class="d-box"><span class="d-label">Chủ xe</span><span class="d-value" id="name-OUT">---</span></div>
+                
+                <!-- fee-box-OUT đã chuyển vào fee-panel-OUT bên trong evidence-box để tránh hiển thị 2 lần -->
+            </div>
+
+            <div class="evidence-box" id="evidence-box-OUT" style="display:none; flex-direction:column; gap:12px;">
+                <div style="display:flex; gap:15px;">
+                    <div class="evidence-item">
+                        <span class="d-label">Khuôn mặt</span>
+                        <img id="evidence-face-OUT" class="evidence-img" src="">
+                    </div>
+                    <div class="evidence-item">
+                        <span class="d-label">Biển số</span>
+                        <img id="evidence-plate-OUT" class="evidence-img plate" src="" style="border-color: #f43f5e;">
+                    </div>
+                </div>
+                <!-- PHÍ GỬI XE: Hiển thị cùng ảnh bằng chứng, tồn tại đến khi xe tiếp theo vào -->
+                <div id="fee-panel-OUT" style="display:none; background:rgba(245,158,11,0.15); border:2px dashed #f59e0b; border-radius:12px; padding:14px; text-align:center;">
+                    <div style="font-size:0.7rem; color:#fcd34d; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">💰 PHÍ GỬI XE</div>
+                    <div id="fee-panel-amount-OUT" style="font-size:2rem; font-weight:900; color:#fbbf24;">0 VNĐ</div>
+                    <div id="fee-panel-note-OUT" style="font-size:0.75rem; color:#94a3b8; margin-top:4px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="global-logs">
+        <table id="logs-table">
+            <thead><tr><th>Thời gian</th><th>Làn</th><th>Biển số</th><th>Chủ xe</th><th>Trạng thái</th><th>Bằng chứng</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <details id="debug-panel">
+        <summary>⚠️ DEBUG LOG (click để mở/đóng) &mdash; <span id="debug-count" style="color:#f59e0b;">0 sự kiện</span></summary>
+        <div id="debug-log"></div>
+    </details>
+
+    <div id="imageViewer" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; justify-content:center; align-items:center; cursor:zoom-out;" onclick="this.style.display='none'">
+        <img id="largeImage" src="" style="max-width:90%; max-height:90%; border:2px solid #38bdf8; border-radius:10px; box-shadow: 0 0 30px rgba(0,0,0,0.8);">
+    </div>
+
+    <script type="module">
+        import { FaceDetector, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.mjs";
+
+        const L = {
+            IN:  { q: [], activeId: null, isProc: false, stream: null, stab: 0, lx: 0, ly: 0 },
+            OUT: { q: [], activeId: null, isProc: false, stream: null, stab: 0, lx: 0, ly: 0 }
+        };
+
+        let faceDetector;
+        const STABILITY_REQ = 40;
+        let ws;
+        let debugCount = 0;
+
+        // Hàm ghi vào Debug Panel
+        function dbg(msg, level = 'info') {
+            debugCount++;
+            document.getElementById('debug-count').innerText = `${debugCount} sự kiện`;
+            const log = document.getElementById('debug-log');
+            if (!log) return;
+            const now = new Date().toLocaleTimeString('vi-VN');
+            const line = document.createElement('div');
+            line.className = `log-line ${level}`;
+            line.innerText = `[${now}] ${msg}`;
+            log.prepend(line); // Mới nhất hiện trên đầu
+            if (log.children.length > 100) log.lastChild.remove(); // Giới hạn 100 dòng
+        }
+
+        // 🔴 BẢN VÁ: HÀM TẠO ÂM THANH BÍP (KHÔNG CẦN FILE MP3)
+        function playAudioTone(frequency, type, duration) {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(frequency, ctx.currentTime);
+                // Tạo hiệu ứng tiếng Bíp ngân lên
+                if (type === 'sine') osc.frequency.exponentialRampToValueAtTime(frequency * 1.5, ctx.currentTime + duration);
+                
+                gain.gain.setValueAtTime(0.5, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration); // Âm lượng giảm dần
+                
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + duration);
+            } catch(e) { console.log("Trình duyệt không hỗ trợ Audio API"); }
+        }
+
+        // Hàm mở ảnh phóng to
+        window.showImage = (url) => {
+            document.getElementById('largeImage').src = url;
+            document.getElementById('imageViewer').style.display = 'flex';
+        };
+
+        // 🔴 BẢN VÁ: HÀM TẠO TOAST TRƯỢT TỪ PHẢI QUA
+        function showToast(title, message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            if(!container) return;
+            
+            const toast = document.createElement('div');
+            let icon = 'fa-info-circle'; let typeClass = '';
+            if(type === 'success') { icon = 'fa-check-circle'; typeClass = 'toast-success'; }
+            if(type === 'danger') { icon = 'fa-skull-crossbones'; typeClass = 'toast-danger'; }
+            if(type === 'warning') { icon = 'fa-exclamation-triangle'; typeClass = 'toast-warning'; }
+            
+            toast.className = `toast-box ${typeClass}`;
+            toast.innerHTML = `<i class="fas ${icon} fa-2x"></i><div><strong style="display:block; font-size:1rem; margin-bottom:2px;">${title}</strong><span style="font-size:0.8rem; color:#cbd5e1;">${message}</span></div>`;
+            container.appendChild(toast);
+            
+            // Tự động trượt mất đi sau 3.5 giây
+            setTimeout(() => { 
+                toast.style.animation = 'fadeOutRight 0.3s forwards'; 
+                setTimeout(() => toast.remove(), 300); 
+            }, 3500);
+        }
+
+        async function initAI() {
+            const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm");
+            faceDetector = await FaceDetector.createFromOptions(vision, {
+                baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite`, delegate: "GPU" },
+                runningMode: "VIDEO"
+            });
+            window.requestAnimationFrame(aiLoop);
+        }
+
+        async function loadCameras() {
+            const devices = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+            ['IN', 'OUT'].forEach(lane => {
+                const select = document.getElementById(`cam-${lane.toLowerCase()}`);
+                select.innerHTML = devices.map((d, i) => `<option value="${d.deviceId}">${d.label || `Cam ${i+1}`}</option>`).join('');
+                select.value = localStorage.getItem(`camId_${lane}`) || (devices[0]?.deviceId);
+                select.onchange = () => { 
+                    localStorage.setItem(`camId_${lane}`, select.value); 
+                    // Chỉ bật camera lên nếu như làn đó ĐANG CÓ XE chờ
+                    if (L[lane].activeId) {
+                        startCam(lane); 
+                    }
+                };
+                // startCam(lane); <-- Đã xóa để tắt camera lúc mới vào
+            });
+        }
+
+        async function startCam(lane) {
+            if (L[lane].stream) L[lane].stream.getTracks().forEach(t => t.stop());
+            const deviceId = document.getElementById(`cam-${lane.toLowerCase()}`).value;
+            try {
+                L[lane].stream = await navigator.mediaDevices.getUserMedia({ video: deviceId ? { deviceId: { exact: deviceId } } : true });
+                const video = document.getElementById(`video-${lane}`);
+                video.srcObject = L[lane].stream;
+            } catch(e) { console.error(`Camera lỗi ở làn ${lane}`, e); }
+        }
+
+        function stopCam(lane) {
+            if (L[lane].stream) {
+                L[lane].stream.getTracks().forEach(t => t.stop()); // Cắt nguồn điện camera
+                L[lane].stream = null;
+            }
+            const video = document.getElementById(`video-${lane}`);
+            video.srcObject = null; // Làm đen màn hình
+        }
+
+        function initWS() {
+            ws = new WebSocket(`${window.location.protocol==='https:'?'wss:':'ws:'}//${window.location.host}/ws`);
+            ws.onmessage = (e) => {
+                const msg = JSON.parse(e.data);
+                if (msg.type === "new_pending_vehicle") {
+                    const lane = msg.lane;
+                    if (!L[lane].q.find(v => v.sid === msg.session_id)) {
+                        L[lane].q.push({ sid: msg.session_id, plate: msg.plate });
+                        if (!L[lane].activeId) activateVehicle(lane, msg.session_id);
+                        else renderQueue(lane);
+                    }
+                } else if (msg.type === "state" || msg.type === "state_update") {
+                    const data = msg.data || msg;
+                    const lane = data.lane;
+                    if(L[lane]) updateUI(lane, data);
+                } else if (msg.type === "log_update") {
+                    fetchLogs(); // Load text ngay lập tức
+                    setTimeout(fetchLogs, 3500); // 3.5 giây sau load lại để lấy ảnh Cloudinary
+                } else if (msg.type === "yellow_zone") {
+                    showYellowZoneUI(msg); // Hiện modal Vùng Vàng
+                } else if (msg.type === "retry_scan") {
+                    // Reset lại camera nếu bảo vệ bấm "QUÉT LẠI"
+                    document.getElementById(`evidence-box-${msg.lane}`).style.display = 'none';
+                    startCam(msg.lane);
+                    // Mở khóa vòng lặp AI để nó quét lại mặt
+                    L[msg.lane].isProc = false;
+                    L[msg.lane].stab = 0;
+                }
+            };
+            ws.onclose = () => setTimeout(initWS, 2000);
+        }
+
+        window.activateVehicle = async (lane, sid) => {
+            L[lane].activeId = sid;
+            
+            // 🔴 BẢN VÁ QUAN TRỌNG: Xóa trạng thái "Đang bận" của xe cũ
+            L[lane].isProc = false;
+            L[lane].stab = 0;
+            
+            // 🔴 BẢN VÁ: TỰ ĐỘNG BẬT CAMERA KHI CÓ XE VÀO HÀNG ĐỢI
+            if (!L[lane].stream) {
+                await startCam(lane);
+            }
+            
+            const v = L[lane].q.find(x => x.sid === sid);
+            if(v) updateUI(lane, { action: "CHỜ QUÉT MẶT", message: "Mời nhìn thẳng Camera", plate: v.plate });
+            document.getElementById(`reticle-${lane}`).style.display = 'block';
+            // Ẩn evidence-box và fee-panel khi bắt đầu xử lý xe mới
+            document.getElementById(`evidence-box-${lane}`).style.display = 'none';
+            if (lane === 'OUT') {
+                const fp = document.getElementById('fee-panel-OUT');
+                if (fp) fp.style.display = 'none';
+            }
+            renderQueue(lane);
+        }
+
+        function removeVehicle(lane, sid) {
+            L[lane].q = L[lane].q.filter(v => v.sid !== sid);
+            if (L[lane].activeId === sid) {
+                L[lane].activeId = L[lane].q.length > 0 ? L[lane].q[0].sid : null;
+                
+                // NẾU HẾT SẠCH XE TRONG HÀNG CHỜ CỦA LÀN ĐÓ
+                if (!L[lane].activeId) {
+                    updateUI(lane, { action: "SẴN SÀNG", message: "Đang chờ xe...", plate: "---" });
+                    document.getElementById(`reticle-${lane}`).style.display = 'none';
+                    
+                    // 🔴 BẢN VÁ: TẮT NGUỒN CAMERA ĐỂ TIẾT KIỆM TÀI NGUYÊN
+                    stopCam(lane); 
+                } else {
+                    activateVehicle(lane, L[lane].activeId); // Bốc xe tiếp theo lên
+                }
+            }
+            renderQueue(lane);
+        }
+
+        function renderQueue(lane) {
+            document.getElementById(`queue-${lane}`).innerHTML = L[lane].q.map(v => `
+                <div class="vehicle-item ${v.sid === L[lane].activeId ? 'active' : ''}" onclick="activateVehicle('${lane}', '${v.sid}')">
+                    ${v.plate} ${v.sid === L[lane].activeId ? '<i class="fas fa-spinner fa-spin"></i>' : ''}
+                </div>
+            `).join('');
+        }
+
+        function updateUI(lane, state) {
+            document.getElementById(`status-badge-${lane}`).innerText = state.action || "XỬ LÝ";
+            document.getElementById(`msg-${lane}`).innerText = state.message || "...";
+            if (state.plate && state.plate !== "Chưa có") document.getElementById(`plate-${lane}`).innerText = state.plate;
+            if (state.name) document.getElementById(`name-${lane}`).innerText = state.name;
+            
+            // (fee-box-OUT cũ đã bị xóa, phí chỉ hiện trong fee-panel-OUT bên trong evidence-box)
+            if (lane === 'OUT') {
+                const feePanel = document.getElementById('fee-panel-OUT');
+                const feePanelAmt = document.getElementById('fee-panel-amount-OUT');
+                const feePanelNote = document.getElementById('fee-panel-note-OUT');
+                if (feePanel && state.fee && state.fee !== '') {
+                    feePanel.style.display = 'block';
+                    feePanelAmt.innerText = state.fee;
+                    // Hiện ghi chú bổ sung nếu là phí cư dân
+                    if (state.fee.includes('CƯ DÂN')) {
+                        feePanelAmt.style.fontSize = '1.1rem';
+                        feePanelNote.innerText = 'Cư dân đã đóng phí tháng — Miễn thu phí lượt';
+                    } else {
+                        feePanelAmt.style.fontSize = '2rem';
+                        feePanelNote.innerText = 'Dưới 24h: 2.000 VNĐ | Mỗi ngày tiếp theo +10.000 VNĐ';
+                    }
+                }
+            }
+
+            const video = document.getElementById(`video-${lane}`);
+
+            dbg(`updateUI làn ${lane}: action="${state.action}" status="${state.status}" plate="${state.plate}"`, 'info');
+
+            // 🔴 PHÂN LOẠI: Từ chối TẠM THỜI (không thấy mặt) vs. THẬT SỰ (sai chủ/kẻ gian)
+            const softRejectStatuses = ["KHÔNG THẤY MẶT", "NO_FACE", "no_face"];
+            const isSoftReject = state.action === "TỪ CHỐI" && softRejectStatuses.includes(state.status);
+
+            if (isSoftReject) {
+                // ⚡ TỪ CHỐI TẠM THỜI: Chỉ phát tiếng cảnh báo nhẹ, KHÔNG tắt camera, KHÔNG kết thúc phiên
+                dbg(`⚠️ TỪ CHỐI TẠM THỜI (${state.status}) làn ${lane} - Giữ camera, cho quét lại`, 'warn');
+                playAudioTone(600, 'triangle', 0.3); // Tiếng bíp ngắn nhẹ
+                showToast(`CHƯA NHẬN DIỆN - LÀN ${lane}`, state.message || 'Hãy nhìn thẳng vào camera!', 'warning');
+                // Reset để AI tiếp tục quét ngay
+                L[lane].isProc = false;
+                L[lane].stab = 0;
+                return; // Dừng tại đây, KHÔNG tắt camera
+            }
+
+            // Danh sách trạng thái kết thúc phiên THẬT SỰ (Thành công hoặc Thất bại bảo mật)
+            const terminalActions = ["SUCCESS", "THÀNH CÔNG", "TỪ CHỐI", "LỖI", "ERROR", "THẤT BẠI"]; // "CẦN XÁC NHẬN" đã bỏ ra khỏi danh sách
+            
+            if (terminalActions.includes(state.action) || state.status === "security_reject" || state.action === "CẢNH BÁO") {
+                const colElement = document.getElementById(`col-${lane.toLowerCase()}`);
+
+                if (state.action === "SUCCESS" || state.action === "THÀNH CÔNG") {
+                    dbg(`✅ THÀNH CÔNG làn ${lane} - Biển số: ${state.plate}`, 'ok');
+                    playAudioTone(800, 'sine', 0.2);
+                    showToast(`THÀNH CÔNG - LÀN ${lane}`, `Biển số: ${state.plate}`, 'success');
+                } else {
+                    // 🚨 CẢNH BÁO / TỪ CHỐI BẢO MẬT: Hiệu ứng tối đa
+                    const msg = state.message || state.action || `Từ chối xe ${state.plate}`;
+                    dbg(`❌ CẢNH BÁO/TỪ CHỐI làn ${lane}: ${msg}`, 'err');
+
+                    // 1. Âm thanh báo động mạnh (3 tiếng)
+                    playAudioTone(200, 'sawtooth', 0.9);
+                    setTimeout(() => playAudioTone(180, 'sawtooth', 0.9), 250);
+                    setTimeout(() => playAudioTone(160, 'sawtooth', 0.9), 500);
+
+                    // 2. Rung + viền đỏ nhấp nháy cho cột làn
+                    colElement.classList.add('shake-danger');
+                    setTimeout(() => colElement.classList.remove('shake-danger'), 2000);
+
+                    // 3. Flash đỏ toàn màn hình
+                    const flashEl = document.getElementById('alert-flash');
+                    flashEl.classList.remove('active');
+                    void flashEl.offsetWidth; // trigger reflow
+                    flashEl.classList.add('active');
+                    setTimeout(() => flashEl.classList.remove('active'), 1600);
+
+                    // 4. Badge status đập đỏ
+                    const badge = document.getElementById(`status-badge-${lane}`);
+                    badge.classList.add('badge-alert');
+                    setTimeout(() => badge.classList.remove('badge-alert'), 2500);
+
+                    // 5. Toast cảnh báo lớn
+                    showToast(`🚨 CẢNH BÁO - LÀN ${lane}`, msg, 'danger');
+                }
+
+                document.getElementById(`reticle-${lane}`).style.display = 'none';
+                stopCam(lane);
+
+                document.getElementById(`evidence-box-${lane}`).style.display = 'flex';
+                document.getElementById(`evidence-plate-${lane}`).src = `/dashboard/last_plate.jpg?t=${Date.now()}`;
+                // Cập nhật ảnh mặt từ canvas (đã chụp trước đó)
+                // (evidence-face đã được set ở captureFace, không cần set lại ở đây)
+
+                // Xe được xóa khỏi hàng sau 5 giây (tăng từ 3s để kịp đọc phí)
+                setTimeout(() => { removeVehicle(lane, L[lane].activeId); }, 5000);
+            } 
+            else if (state.action === "QUÉT LẠI") {
+                dbg(`🔄 QUÉT LẠI làn ${lane}`, 'warn');
+                document.getElementById(`evidence-box-${lane}`).style.display = 'none';
+            } else {
+                dbg(`ℹ️ Trạng thái không phải terminal: "${state.action}"`, 'warn');
+            }
+        }
+
+        async function aiLoop() {
+            for (const lane of ['IN', 'OUT']) {
+                const s = L[lane];
+                if (!s.activeId || s.isProc || !faceDetector) continue;
+
+                const video = document.getElementById(`video-${lane}`);
+                const reticle = document.getElementById(`reticle-${lane}`);
+                if (video.readyState === 4) {
+                    const dets = faceDetector.detectForVideo(video, performance.now()).detections;
+                    if (dets.length > 0) {
+                        const f = dets[0].boundingBox;
+                        const dist = Math.sqrt(Math.pow(f.originX - s.lx, 2) + Math.pow(f.originY - s.ly, 2));
+                        if (dist < 15) {
+                            s.stab++;
+                            reticle.style.borderColor = "#fbbf24";
+                        } else { s.stab = 0; reticle.style.borderColor = (lane==='IN'?"#10b981":"#f43f5e"); }
+                        s.lx = f.originX; s.ly = f.originY;
+
+                        if (s.stab >= STABILITY_REQ) captureFace(lane);
+                    } else { s.stab = 0; }
+                }
+            }
+            window.requestAnimationFrame(aiLoop);
+        }
+
+        async function captureFace(lane) {
+            const sid = L[lane].activeId;
+            if (!sid) return;
+            L[lane].isProc = true;
+            document.getElementById(`msg-${lane}`).innerText = "Đang trích xuất Vector...";
+            
+            const video = document.getElementById(`video-${lane}`);
+            const canvas = document.getElementById(`canvas-${lane}`);
+            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+
+            // 🔴 SỬA TÊN ID CHỖ NÀY
+            document.getElementById(`evidence-face-${lane}`).src = canvas.toDataURL('image/jpeg', 0.8);
+
+            try {
+                const res = await fetch('/api/scan-face-webcam', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: canvas.toDataURL('image/jpeg', 0.8), session_id: sid, lane: lane })
+                });
+                const data = await res.json();
+                if (data.status !== "completed" && data.status !== "yellow_zone") {
+                    setTimeout(() => { L[lane].isProc = false; L[lane].stab = 0; }, 2000);
+                }
+            } catch(e) { L[lane].isProc = false; L[lane].stab = 0; }
+        }
+
+        async function fetchLogs() {
+            const res = await fetch('/api/logs?t=' + Date.now());
+            const data = await res.json();
+            document.querySelector('#logs-table tbody').innerHTML = data.slice(0,10).map(log => {
+                // 🔴 Thêm class cursor:pointer và sự kiện onclick="showImage('url')"
+                const faceImg = log.face_url ? `<img src="${log.face_url}" onclick="showImage('${log.face_url}')" title="Bấm để xem ảnh gốc" style="height:35px; width:35px; object-fit:cover; border-radius:5px; margin-right:5px; cursor:zoom-in;">` : '';
+                
+                const plateImg = log.plate_url ? `<img src="${log.plate_url}" onclick="showImage('${log.plate_url}')" title="Bấm để xem ảnh gốc" style="height:35px; width:70px; object-fit:contain; background:#fff; border-radius:5px; cursor:zoom-in;">` : '';
+                
+                return `
+                <tr>
+                    <td>${log.time}</td>
+                    <td><span style="background:${log.action.includes('IN')?'#10b981':'#f43f5e'}; padding:2px 6px; border-radius:4px; font-weight:800; color:#fff; font-size:0.7rem;">${log.action.includes('IN') ? 'VÀO':'RA'}</span></td>
+                    <td><span class="plate-format">${log.plate}</span></td>
+                    <td>${log.name}</td>
+                    <td style="color:${log.status.includes('THÀNH')?'#10b981':'#f43f5e'}; font-weight:bold;">${log.status}</td>
+                    <td>${faceImg} ${plateImg}</td>
+                </tr>
+                `;
+            }).join('');
+        }
+
+        window.onload = async () => { initWS(); fetchLogs(); await initAI(); await loadCameras(); };
+
+        window.resetData = async () => {
+            if (confirm("CẢNH BÁO NGUY HIỂM: Hành động này sẽ XÓA SẠCH toàn bộ Cư dân, Hộ gia đình và Nhật ký ra vào trong PostgreSQL cũng như vector khuôn mặt trong Qdrant.\n\nBạn có chắc chắn muốn làm mới hệ thống không?")) {
+                try {
+                    const res = await fetch('/api/reset', { method: 'POST' });
+                    const data = await res.json();
+                    alert(data.message || "Đã reset dữ liệu thành công!");
+                    location.reload();
+                } catch(e) {
+                    alert("Lỗi khi reset: " + e.message);
+                }
+            }
+        };
+
+        window.showYellowZoneUI = (msg) => {
+            const lane = msg.lane;
+            playAudioTone(400, 'triangle', 0.6); // Tiếng píp píp cảnh báo
+            showToast(`CẦN XÁC NHẬN (LÀN ${lane})`, `Biển số: ${msg.plate} - Tương đồng: ${msg.score}`, 'warning');
+            
+            document.getElementById(`yz-score-${lane}`).innerText = msg.score;
+            document.getElementById(`yz-name-${lane}`).innerText = msg.name;
+            document.getElementById(`yz-cam-${lane}`).src = document.getElementById(`evidence-face-${lane}`).src;
+            // Placeholder SVG nếu không có ảnh hồ sơ trong CSDL
+            const NO_PHOTO_SVG = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Crect width='120' height='120' fill='%231e293b'/%3E%3Ccircle cx='60' cy='45' r='22' fill='%23334155'/%3E%3Cellipse cx='60' cy='95' rx='35' ry='22' fill='%23334155'/%3E%3Ctext x='60' y='118' text-anchor='middle' fill='%2364748b' font-size='9' font-family='sans-serif'%3EChưa có ảnh hồ sơ%3C/text%3E%3C/svg%3E`;
+            document.getElementById(`yz-reg-${lane}`).src = msg.registered_face_url || NO_PHOTO_SVG;
+            
+            document.getElementById(`yz-overlay-${lane}`).style.display = 'flex';
+        };
+
+        window.handleManual = async (lane, action) => {
+            document.getElementById(`yz-overlay-${lane}`).style.display = 'none';
+            const sid = L[lane].activeId;
+            if(!sid) return;
+            try {
+                await fetch(`/api/manual-approve/${lane}/${sid}`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ action: action })
+                });
+            } catch(e) { console.error("Lỗi xác nhận thủ công:", e); }
+        };
+    </script>
+</body>
+</html>

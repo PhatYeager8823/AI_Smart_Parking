@@ -1,0 +1,42 @@
+# Virtual Environments
+venv_backend/
+venv_face/
+venv_plate/
+venv/
+.env
+
+# Databases & Data
+postgres_data/
+qdrant_data/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Temporary & Logs
+debug_log.txt
+temp_*/
+*.jpg
+*.png
+*.pt
+
+# IDE
+.vscode/
+.idea/
+.vs/
+
+# Large binaries
+ngrok.exe
+
+# Logs directory
+logs/
+
+# Sensitive env files
+system.env
+
+# Archive & temp
+_archive_/
+
+# servers config (local)
+servers.json

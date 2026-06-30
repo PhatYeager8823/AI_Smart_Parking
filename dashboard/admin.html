@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Đăng Ký Sổ Hộ Khẩu</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #fff; padding: 30px; font-family: 'Nunito', 'Segoe UI', sans-serif; }
+        .container { max-width: 800px; }
+        .card { border-radius: 20px; border: 1px solid rgba(255,255,255,0.05); background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+        .card-header { border-radius: 20px 20px 0 0 !important; background: rgba(15, 23, 42, 0.8); border-bottom: 1px solid #334155; }
+        .form-control { background-color: #1e293b; color: #fff; border: 1px solid #334155; }
+        .form-control:focus { background-color: #0f172a; color: #fff; border-color: #38bdf8; box-shadow: 0 0 0 0.25rem rgba(56, 189, 248, 0.25); }
+        .form-control::placeholder { color: #64748b; }
+        .webcam-container { width: 100%; border-radius: 10px; overflow: hidden; background: #000; position: relative; display: none; }
+        #admin-webcam { width: 100%; height: auto; transform: scaleX(-1); }
+        .member-preview { max-width: 100px; max-height: 100px; border-radius: 10px; display: none; object-fit: cover; border: 2px solid #0dcaf0; }
+        
+        /* TOAST SYSTEM */
+        #toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+        .toast-box { 
+            background: #1e293b; color: #fff; padding: 15px 25px; border-radius: 10px; box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+            display: flex; align-items: center; gap: 12px; min-width: 300px; animation: slideIn 0.3s ease; transition: all 0.4s;
+            border: 1px solid #334155;
+        }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .toast-success { border-left: 5px solid #10b981; }
+        .toast-danger { border-left: 5px solid #f43f5e; }
+        .toast-info { border-left: 5px solid #38bdf8; }
+        .toast-box i { font-size: 1.2rem; }
+        .toast-success i { color: #10b981; }
+        .toast-danger i { color: #f43f5e; }
+        .toast-info i { color: #38bdf8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 class="text-center mb-4 fw-bold" style="color: #38bdf8;"><i class="fas fa-shield-halved"></i> HỆ THỐNG AN NINH HỘ GIA ĐÌNH</h2>
+        
+        <div class="card">
+            <div class="card-header text-white py-3">
+                <h5 class="mb-0 fw-bold"><i class="fas fa-home"></i> Đăng Ký Hộ Gia Đình Mới</h5>
+            </div>
+            <div class="card-body p-4">
+                <form id="familyForm">
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Số Phòng</label>
+                            <input type="text" id="room_number" class="form-control form-control-lg" placeholder="VD: A12.05" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Chủ Hộ</label>
+                            <input type="text" id="owner_name" class="form-control form-control-lg" placeholder="Họ và tên" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold text-danger">Phí Tháng (VNĐ)</label>
+                            <input type="number" id="monthly_fee" class="form-control form-control-lg" placeholder="VD: 150000" value="0" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-4 p-3 rounded" style="background: rgba(15, 23, 42, 0.5); border: 1px solid #334155;">
+                        <label class="form-label fw-bold d-flex justify-content-between align-items-center" style="color: #10b981;">
+                            <span><i class="fas fa-car"></i> Danh sách Biển số xe</span>
+                            <button type="button" class="btn btn-sm btn-outline-success" onclick="addPlateField()">+ Thêm xe</button>
+                        </label>
+                        <div id="plateContainer">
+                            <!-- Bọc input vào 1 div để chứa nút X -->
+                            <div class="position-relative mb-2">
+                                <input type="text" class="form-control plate-input w-75" style="border-color: #10b981;" placeholder="VD: 59-L1 123.45">
+                                <!-- Nút X xóa -->
+                                <button type="button" class="btn-close btn-close-white position-absolute top-50 end-0 translate-middle-y me-2" onclick="this.parentElement.remove()"></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-4 p-3 rounded" style="background: rgba(15, 23, 42, 0.5); border: 1px solid #334155;">
+                        <label class="form-label fw-bold d-flex justify-content-between align-items-center" style="color: #38bdf8;">
+                            <span><i class="fas fa-users"></i> Thành viên gia đình</span>
+                            <button type="button" class="btn btn-sm btn-outline-info" onclick="addMemberField()">+ Thêm người</button>
+                        </label>
+                        <div id="memberContainer">
+                            </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold" id="submitBtn">
+                        <span id="btnText">XÁC NHẬN ĐĂNG KÝ VÀO HỆ THỐNG AI</span>
+                        <div class="spinner-border spinner-border-sm text-light d-none" id="btnSpinner" role="status"></div>
+                    </button>
+                </form>
+                
+                <div id="statusMessage" class="mt-4 text-center" style="display: none; font-size: 1.1rem;"></div>
+
+                <!-- === KHU VỰC QUẢN LÝ & ĐIỀU CHỈNH HỘ DÂN === -->
+                <div class="mt-5 pt-4 border-top border-secondary">
+                    <h5 class="text-warning fw-bold mb-3"><i class="fas fa-sliders"></i> Quản Lý & Điều Chỉnh Hộ Dân</h5>
+                    <div class="input-group mb-4">
+                        <input type="text" id="search_room" class="form-control form-control-lg" placeholder="Nhập số phòng cần chỉnh sửa... (VD: A12.05)">
+                        <button class="btn btn-warning fw-bold text-dark px-4" type="button" onclick="searchFamily()"><i class="fas fa-search"></i> TÌM KIẾM</button>
+                    </div>
+
+                    <div id="familyManagementBox" class="p-3 rounded d-none" style="background: rgba(15, 23, 42, 0.6); border: 1px dashed #ffc107;">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                CHỦ HỘ: <strong id="m_owner" class="text-white fs-5">---</strong> |
+                                ID HỘ: <strong id="m_fam_id" class="text-info">---</strong>
+                            </div>
+                            <div class="d-flex align-items-center gap-3">
+                                <button type="button" class="btn btn-sm btn-danger fw-bold" onclick="removeWholeFamily()"><i class="fas fa-house"></i> HỘ NÀY CHUYỂN ĐI</button>
+                                <button type="button" class="btn-close btn-close-white" aria-label="Close" onclick="closeFamilyBox()" title="Đóng bảng quản lý"></button>
+                            </div>
+                        </div>
+
+                        <div class="mb-3 p-2 rounded bg-dark bg-opacity-50">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="small text-success fw-bold"><i class="fas fa-car"></i> BIỂN SỐ XE ĐĂNG KÝ</span>
+                                <button type="button" class="btn btn-sm btn-outline-success" onclick="addSingleVehicle()">+ Thêm xe mới</button>
+                            </div>
+                            <div id="m_plate_list" class="d-flex flex-wrap gap-2"></div>
+                        </div>
+
+                        <div class="p-2 rounded bg-dark bg-opacity-50">
+                            <span class="small text-info fw-bold d-block mb-2"><i class="fas fa-users"></i> THÀNH VIÊN TRONG HỘ</span>
+                            <div id="m_member_list" class="row row-cols-1 row-cols-md-2 g-2"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="mt-4 text-center">
+            <a href="index.html" class="text-decoration-none fw-bold" style="color: #94a3b8;">← Quay lại Bãi Giữ Xe</a>
+        </div>
+    </div>
+    
+    <!-- Toast Container cho thông báo Box -->
+    <div id="toast-container"></div>
+
+    <div class="modal fade" id="webcamModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title"><i class="fas fa-camera"></i> Chụp ảnh cư dân</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="stopAdminCamera()"></button>
+                </div>
+                <div class="modal-body text-center bg-dark">
+                    <div class="webcam-container" id="admin-webcam-container">
+                        <video id="admin-webcam" autoplay playsinline></video>
+                    </div>
+                    <canvas id="admin-canvas" style="display: none;"></canvas>
+                    <div id="webcam-loading" class="text-white my-3">Đang khởi động Camera...</div>
+                </div>
+                <div class="modal-footer bg-dark justify-content-between">
+                    <button type="button" class="btn btn-outline-light btn-sm" onclick="switchAdminCamera()"><i class="fas fa-sync"></i> Đổi Camera</button>
+                    <div>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="stopAdminCamera()">Hủy</button>
+                        <button type="button" class="btn btn-info fw-bold text-white" onclick="captureAdminPhoto()"><i class="fas fa-camera"></i> CHỤP & LƯU</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // --- LOGIC GIAO DIỆN CƠ BẢN ---
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast-box toast-${type}`;
+            toast.innerHTML = `
+                <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-triangle'}"></i>
+                <span class="fw-bold">${message}</span>
+            `;
+            container.appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateY(-20px)'; setTimeout(() => toast.remove(), 400); }, 3500);
+        }
+
+        function addPlateField() {
+            const container = document.getElementById('plateContainer');
+            const div = document.createElement('div');
+            // Thêm class cho div để căn chỉnh
+            div.className = 'position-relative mb-2';
+            
+            // Nhúng cả input và nút X vào trong div
+            div.innerHTML = `
+                <input type="text" class="form-control plate-input w-75" style="border-color: #10b981;" placeholder="Nhập biển số xe tiếp theo...">
+                <button type="button" class="btn-close btn-close-white position-absolute top-50 end-0 translate-middle-y me-2" onclick="this.parentElement.remove()"></button>
+            `;
+            
+            container.appendChild(div);
+        }
+
+        // Tự động thêm 1 người khi vừa mở web
+        window.onload = () => { addMemberField(); }
+
+        function addMemberField() {
+            const container = document.getElementById('memberContainer');
+            const memberId = 'member_' + Date.now(); // Tạo ID duy nhất cho mỗi người
+            const div = document.createElement('div');
+            div.className = 'member-entry p-3 mb-3 rounded position-relative';
+            div.style.background = 'rgba(30, 41, 59, 0.8)';
+            div.style.border = '1px solid #38bdf8';
+            div.id = memberId;
+            
+            div.innerHTML = `
+                <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-2" onclick="this.parentElement.remove()"></button>
+                <input type="text" class="form-control mb-3 member-name w-75 fw-bold" style="color: #38bdf8;" placeholder="Tên thành viên (VD: Nguyễn Văn A)" required>
+                
+                <div class="d-flex gap-2 align-items-center">
+                    <button type="button" class="btn btn-outline-info" onclick="openAdminCamera('${memberId}')">
+                        <i class="fas fa-camera"></i> Chụp trực tiếp
+                    </button>
+                    <span class="small" style="color: #94a3b8;">hoặc</span>
+                    <input type="file" class="form-control member-photo-file w-50" accept="image/*" onchange="previewFile('${memberId}', this)">
+                </div>
+
+                <div class="mt-3 d-flex align-items-center gap-3">
+                    <img class="member-preview shadow-sm" id="preview_${memberId}" src="">
+                    <span class="text-success small fw-bold" id="status_${memberId}" style="display:none;"><i class="fas fa-check-circle"></i> Đã có ảnh</span>
+                    <input type="hidden" class="member-final-base64" id="base64_${memberId}" required>
+                </div>
+            `;
+            container.appendChild(div);
+        }
+
+        // --- LOGIC WEBCAM ---
+        let adminStream = null;
+        let currentTargetMemberId = null;
+        let videoDevices = [];
+        let currentDeviceIndex = 0;
+        const webcamModal = new bootstrap.Modal(document.getElementById('webcamModal'));
+
+        async function openAdminCamera(memberId) {
+            currentTargetMemberId = memberId;
+            const container = document.getElementById('admin-webcam-container');
+            const loading = document.getElementById('webcam-loading');
+            
+            container.style.display = 'block';
+            loading.style.display = 'block';
+            webcamModal.show();
+
+            // Luôn làm mới danh sách camera để đảm bảo nhận diện đủ thiết bị mới cắm vào
+            try {
+                // Yêu cầu quyền trước để lấy được Label (tên) của Camera
+                if (!adminStream) {
+                    const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    tempStream.getTracks().forEach(t => t.stop());
+                }
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                videoDevices = devices.filter(d => d.kind === 'videoinput');
+            } catch (e) {
+                console.error("Lỗi liệt kê thiết bị:", e);
+            }
+
+            startSelectedCamera();
+        }
+
+        async function startSelectedCamera() {
+            const video = document.getElementById('admin-webcam');
+            const loading = document.getElementById('webcam-loading');
+            loading.style.display = 'block';
+
+            try {
+                stopAdminCamera();
+
+                const currentDevice = videoDevices[currentDeviceIndex];
+                const constraints = { 
+                    video: { 
+                        deviceId: currentDevice ? { exact: currentDevice.deviceId } : undefined,
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                };
+
+                // Hiện tên camera đang chọn
+                if (currentDevice) {
+                    showToast("Đang dùng: " + (currentDevice.label || `Camera ${currentDeviceIndex + 1}`), "info");
+                }
+
+                adminStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = adminStream;
+                video.onloadedmetadata = async () => {
+                    loading.style.display = 'none';
+                    await video.play();
+                };
+            } catch (err) {
+                // Chỉ log lỗi ra console để debug, không hiện thông báo làm phiền người dùng
+                console.warn("Không thể khởi động thiết bị này (có thể là Cam ảo):", err);
+            }
+        }
+
+        function switchAdminCamera() {
+            if (videoDevices.length < 2) {
+                showToast("Máy chỉ có 1 camera hoặc chưa cấp quyền liệt kê thiết bị.", "info");
+                return;
+            }
+            currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
+            startSelectedCamera();
+        }
+
+        function stopAdminCamera() {
+            if (adminStream) {
+                adminStream.getTracks().forEach(track => track.stop());
+                adminStream = null;
+            }
+            const video = document.getElementById('admin-webcam');
+            if (video) {
+                video.pause();
+                video.srcObject = null;
+            }
+        }
+
+        function captureAdminPhoto() {
+            const video = document.getElementById('admin-webcam');
+            const canvas = document.getElementById('admin-canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            
+            // Lật ngược ảnh lại cho đúng chiều (vì video đang bị mirror)
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Lấy Base64
+            const base64Str = canvas.toDataURL('image/jpeg', 0.9);
+            
+            // Đẩy ảnh vào giao diện của thành viên đang được chọn
+            document.getElementById(`base64_${currentTargetMemberId}`).value = base64Str;
+            document.getElementById(`preview_${currentTargetMemberId}`).src = base64Str;
+            document.getElementById(`preview_${currentTargetMemberId}`).style.display = 'block';
+            document.getElementById(`status_${currentTargetMemberId}`).style.display = 'block';
+            
+            // Tắt Camera
+            stopAdminCamera();
+            webcamModal.hide();
+        }
+
+        // --- LOGIC FILE UPLOAD (Dự phòng) ---
+        function previewFile(memberId, inputElement) {
+            if (inputElement.files && inputElement.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const base64Str = e.target.result;
+                    document.getElementById(`base64_${memberId}`).value = base64Str;
+                    document.getElementById(`preview_${memberId}`).src = base64Str;
+                    document.getElementById(`preview_${memberId}`).style.display = 'block';
+                    document.getElementById(`status_${memberId}`).style.display = 'block';
+                }
+                reader.readAsDataURL(inputElement.files[0]);
+            }
+        }
+
+        // --- LOGIC GỬI LÊN SERVER ---
+        document.getElementById('familyForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const btnText = document.getElementById('btnText');
+            const btnSpinner = document.getElementById('btnSpinner');
+            const submitBtn = document.getElementById('submitBtn');
+            const statusMsg = document.getElementById('statusMessage');
+            
+            // Kiểm tra xem tất cả thành viên đã có ảnh chưa
+            const memberEntries = document.querySelectorAll('.member-entry');
+            let isAllPhotosReady = true;
+            const members = [];
+
+            for (let entry of memberEntries) {
+                const name = entry.querySelector('.member-name').value;
+                const base64Data = entry.querySelector('.member-final-base64').value;
+                
+                if (!base64Data) {
+                    showToast(`Vui lòng cung cấp ảnh cho thành viên: ${name}`, "danger");
+                    isAllPhotosReady = false;
+                    break;
+                }
+                members.push({ name: name, image_base64: base64Data });
+            }
+
+            if (!isAllPhotosReady) return;
+
+            // Bắt đầu gửi
+            btnText.textContent = "ĐANG ĐẨY DỮ LIỆU LÊN AI...";
+            btnSpinner.classList.remove('d-none');
+            submitBtn.disabled = true;
+            statusMsg.style.display = 'none';
+
+            try {
+                const room_number = document.getElementById('room_number').value;
+                const owner_name = document.getElementById('owner_name').value;
+                // 🔴 THÊM DÒNG NÀY: Lấy giá trị tiền từ ô input
+                const monthly_fee = parseInt(document.getElementById('monthly_fee').value) || 0; 
+                
+                const plates = [];
+                document.querySelectorAll('.plate-input').forEach(input => {
+                    if(input.value.trim() !== '') plates.push(input.value.trim().toUpperCase());
+                });
+
+                const response = await fetch('/api/admin/register-family', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    // 🔴 THÊM biến monthly_fee vào body gửi đi
+                    body: JSON.stringify({ room_number, owner_name, plates, members, monthly_fee })
+                });
+
+                const result = await response.json();
+                
+                statusMsg.style.display = 'block';
+                if(result.status === 'success') {
+                    statusMsg.className = 'mt-4 text-center text-success fw-bold p-3 bg-success bg-opacity-10 rounded border border-success';
+                    statusMsg.innerHTML = "✅ " + result.message;
+                    setTimeout(() => { location.reload(); }, 2000);
+                } else if (result.status === 'error_duplicate') {
+                    statusMsg.className = 'mt-4 p-4 bg-danger bg-opacity-10 rounded border border-danger text-white';
+                    statusMsg.innerHTML = `
+                        <div class="text-center text-danger fw-bold mb-4 fs-5">
+                            <i class="fas fa-skull-crossbones"></i> ${result.message}
+                        </div>
+                        <div class="d-flex justify-content-center gap-5">
+                            <div class="text-center">
+                                <div class="small text-info mb-2 fw-bold"><i class="fas fa-camera"></i> ẢNH VỪA CHỤP</div>
+                                <img src="${result.new_face}" style="width: 180px; height: 180px; object-fit: cover; border-radius: 12px; border: 2px solid #0dcaf0; box-shadow: 0 0 15px rgba(13, 202, 240, 0.3);">
+                            </div>
+                            <div class="text-center">
+                                <div class="small text-warning mb-2 fw-bold"><i class="fas fa-database"></i> ẢNH ĐÃ ĐĂNG KÝ</div>
+                                <img src="${result.old_face}" style="width: 180px; height: 180px; object-fit: cover; border-radius: 12px; border: 2px solid #ffc107; box-shadow: 0 0 15px rgba(255, 193, 7, 0.3);">
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    statusMsg.className = 'mt-4 text-center text-danger fw-bold p-3 bg-danger bg-opacity-10 rounded border border-danger';
+                    statusMsg.innerHTML = "❌ Lỗi: " + result.message;
+                }
+            } catch (error) {
+                statusMsg.style.display = 'block';
+                statusMsg.className = 'mt-4 text-center text-danger fw-bold p-3 bg-danger bg-opacity-10 rounded border border-danger';
+                statusMsg.innerHTML = "❌ Lỗi kết nối máy chủ!";
+            } finally {
+                btnText.textContent = "XÁC NHẬN ĐĂNG KÝ VÀO HỆ THỐNG AI";
+                btnSpinner.classList.add('d-none');
+                submitBtn.disabled = false;
+            }
+        });
+
+        // =============================================
+        // NGHIỆP VỤ QUẢN LÝ HỘ GIA ĐÌNH
+        // =============================================
+        let currentLoadedRoom = "";
+        let currentLoadedFamilyId = null;
+
+        async function searchFamily() {
+            const room = document.getElementById('search_room').value.trim();
+            if (!room) return showToast("Vui lòng nhập số phòng", "danger");
+            try {
+                const resp = await fetch(`/api/admin/family/${encodeURIComponent(room)}`);
+                const data = await resp.json();
+                if (data.status === 'error') {
+                    document.getElementById('familyManagementBox').classList.add('d-none');
+                    return showToast(data.message, "danger");
+                }
+                currentLoadedRoom = room;
+                currentLoadedFamilyId = data.family_id;
+                document.getElementById('m_owner').innerText = data.owner_name;
+                document.getElementById('m_fam_id').innerText = data.family_id;
+
+                // Render danh sách xe
+                const plateDiv = document.getElementById('m_plate_list');
+                plateDiv.innerHTML = data.vehicles.length === 0
+                    ? '<span class="text-muted small">Không có xe nào</span>'
+                    : data.vehicles.map(v => `
+                        <div class="d-flex align-items-center gap-1 px-2 py-1 rounded font-monospace fw-bold" style="background:#fff; color:#000; border:1px solid #aaa; font-size:0.85rem;">
+                            ${v}
+                            <i class="fas fa-times-circle text-danger ms-1" style="cursor:pointer;" onclick="deleteVehicle('${v}')" title="Xóa xe này"></i>
+                        </div>`).join('');
+
+                // Render danh sách thành viên
+                const memberDiv = document.getElementById('m_member_list');
+                memberDiv.innerHTML = data.members.length === 0
+                    ? '<span class="text-muted small col-12">Không có thành viên</span>'
+                    : data.members.map(m => `
+                        <div class="col">
+                            <div class="p-2 rounded d-flex align-items-center justify-content-between border border-secondary" style="background: rgba(255,255,255,0.02)">
+                                <div class="d-flex align-items-center gap-2">
+                                    <img src="${m.face_url || ''}" onerror="this.src=''" style="width:38px;height:38px;object-fit:cover;border-radius:6px;background:#334155;">
+                                    <div>
+                                        <div class="fw-bold small text-white">${m.name}</div>
+                                        <div class="text-muted" style="font-size:0.7rem;">ID: ${m.user_id}</div>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-danger py-0" style="font-size:0.75rem;" onclick="removeMember(${m.user_id}, '${m.name}')">Dời đi</button>
+                            </div>
+                        </div>`).join('');
+
+                document.getElementById('familyManagementBox').classList.remove('d-none');
+                showToast(`Đã tải dữ liệu phòng ${room}`, "success");
+            } catch (e) { showToast("Lỗi kết nối máy chủ", "danger"); }
+        }
+
+        async function addSingleVehicle() {
+            const plate = prompt("Nhập biển số xe cần thêm vào hộ này\n(VD: 59-X1 999.99):");
+            if (!plate || !plate.trim()) return;
+            try {
+                const resp = await fetch(`/api/admin/family/${currentLoadedFamilyId}/add-vehicle`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ plate_number: plate.trim() })
+                });
+                const r = await resp.json();
+                showToast(r.message, r.status === 'success' ? 'success' : 'danger');
+                if (r.status === 'success') searchFamily();
+            } catch (e) { showToast("Lỗi xử lý", "danger"); }
+        }
+
+        async function deleteVehicle(plate) {
+            if (!confirm(`Xóa biển số "${plate}" khỏi hộ này?\nXe sẽ trở thành xe vãng lai.`)) return;
+            try {
+                // encodeURIComponent để xử lý khoảng trắng và ký tự đặc biệt trong biển số
+                const resp = await fetch(`/api/admin/family/vehicle/${encodeURIComponent(plate)}`, { method: 'DELETE' });
+                const r = await resp.json();
+                showToast(r.message, r.status === 'success' ? 'success' : 'danger');
+                if (r.status === 'success') searchFamily();
+            } catch (e) { showToast("Lỗi kết nối", "danger"); }
+        }
+
+        async function removeMember(userId, name) {
+            if (!confirm(`Xác nhận thành viên "${name}" dời đi?\nNgười này sẽ bị gỡ khỏi hộ và chuyển thành khách vãng lai.`)) return;
+            try {
+                const resp = await fetch(`/api/admin/family/member/${userId}`, { method: 'POST' });
+                const r = await resp.json();
+                showToast(r.message, r.status === 'success' ? 'success' : 'danger');
+                if (r.status === 'success') searchFamily();
+            } catch (e) { showToast("Lỗi xử lý", "danger"); }
+        }
+
+        async function removeWholeFamily() {
+            if (!confirm(`CẢNH BÁO: Xác nhận toàn bộ hộ phòng "${currentLoadedRoom}" dời đi?\nTất cả xe và người sẽ bị gỡ liên kết hộ!`)) return;
+            try {
+                const resp = await fetch(`/api/admin/remove-family/${encodeURIComponent(currentLoadedRoom)}`, { method: 'POST' });
+                const r = await resp.json();
+                showToast(r.message, r.status === 'success' ? 'success' : 'danger');
+                if (r.status === 'success') {
+                    document.getElementById('familyManagementBox').classList.add('d-none');
+                    document.getElementById('search_room').value = "";
+                }
+            } catch (e) { showToast("Lỗi kết nối", "danger"); }
+        }
+
+        function closeFamilyBox() {
+            document.getElementById('familyManagementBox').classList.add('d-none');
+            document.getElementById('search_room').value = "";
+        }
+    </script>
+</body>
+</html>

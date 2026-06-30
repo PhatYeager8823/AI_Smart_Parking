@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+python-multipart
+python-dotenv
+requests
+psycopg2-binary
+numpy
+qdrant-client
+protobuf==3.19.6
