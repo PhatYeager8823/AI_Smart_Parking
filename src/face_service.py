@@ -8,15 +8,19 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from deepface import DeepFace
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
 
 os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
+
+# Shared log files and environment config
+ROOT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+load_dotenv(os.path.join(ROOT_DIR, "system.env"))
+load_dotenv(os.path.join(ROOT_DIR, ".env"))
 
 # Load config from env
 BACKBONE = os.getenv("FACE_BACKBONE", "Facenet512")
 DETECTOR = os.getenv("FACE_DETECTOR", "mtcnn")
 
-# Shared log files
-ROOT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 DEBUG_LOG_FILE = os.path.join(ROOT_DIR, "logs", "debug_face.txt")
 ERROR_LOG_FILE = os.path.join(ROOT_DIR, "logs", "error_log.txt")
 
@@ -77,7 +81,7 @@ def health():
 
 @app.post("/represent")
 def represent(payload: ImagePayload):
-    # Sửa lỗi race condition: Dùng file tạm riêng biệt cho mỗi request
+    # Sử dụng file tạm riêng biệt cho mỗi request
     temp_path = f"temp_face_{uuid.uuid4().hex[:8]}.jpg"
     try:
         write_face_debug(f"Nhận request đối soát ({len(payload.image)} bytes)")
@@ -120,7 +124,7 @@ def represent(payload: ImagePayload):
         write_face_debug(f"LỖI HỆ THỐNG: {msg}")
         raise HTTPException(status_code=500, detail=msg)
     finally:
-        # Dọn file tạm sau mỗi request (tránh rác đọ lại)
+        # Dọn dẹp file tạm sau mỗi request
         if os.path.exists(temp_path):
             try: os.remove(temp_path)
             except: pass

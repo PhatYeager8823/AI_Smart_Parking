@@ -389,7 +389,6 @@
             try {
                 const room_number = document.getElementById('room_number').value;
                 const owner_name = document.getElementById('owner_name').value;
-                // 🔴 THÊM DÒNG NÀY: Lấy giá trị tiền từ ô input
                 const monthly_fee = parseInt(document.getElementById('monthly_fee').value) || 0; 
                 
                 const plates = [];
@@ -400,7 +399,6 @@
                 const response = await fetch('/api/admin/register-family', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    // 🔴 THÊM biến monthly_fee vào body gửi đi
                     body: JSON.stringify({ room_number, owner_name, plates, members, monthly_fee })
                 });
 

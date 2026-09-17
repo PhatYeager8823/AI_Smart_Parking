@@ -4,8 +4,9 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from dotenv import load_dotenv
 
-# Load configuration from system.env
+# Load configuration from system.env / .env
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "system.env"))
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env"))
 
 class DatabaseManager:
     def __init__(self):
@@ -80,18 +81,18 @@ class DatabaseManager:
         if self.ensure_pg_connection():
             try:
                 cur = self.pg_conn.cursor()
-                # 🟢 TỰ ĐỘNG NÂNG CẤP BẢNG USERS
+                # Cập nhật schema bảng users nếu cần
                 cur.execute("ALTER TABLE parking_users ADD COLUMN IF NOT EXISTS face_url TEXT;")
                 cur.execute("ALTER TABLE parking_users ADD COLUMN IF NOT EXISTS face_public_id VARCHAR(255);")
                 
-                # 🟢 TỰ ĐỘNG NÂNG CẤP BẢNG LOGS
+                # Cập nhật schema bảng logs nếu cần
                 cur.execute("ALTER TABLE parking_logs ADD COLUMN IF NOT EXISTS face_url TEXT;")
                 cur.execute("ALTER TABLE parking_logs ADD COLUMN IF NOT EXISTS plate_url TEXT;")
                 cur.execute("ALTER TABLE parking_logs ADD COLUMN IF NOT EXISTS face_public_id VARCHAR(255);")
                 cur.execute("ALTER TABLE parking_logs ADD COLUMN IF NOT EXISTS plate_public_id VARCHAR(255);")
                 cur.execute("ALTER TABLE parking_logs ADD COLUMN IF NOT EXISTS parking_fee INTEGER DEFAULT 0;")
                 
-                # 🟢 THÊM DÒNG NÀY ĐỂ LƯU PHÍ THÁNG CỦA HỘ GIA ĐÌNH
+                # Cập nhật trường lưu phí tháng của hộ gia đình
                 cur.execute("ALTER TABLE families ADD COLUMN IF NOT EXISTS monthly_fee INTEGER DEFAULT 0;")
                 
                 self.pg_conn.commit()
@@ -180,7 +181,7 @@ class DatabaseManager:
                 return None
             family_id = fam_res[0]
 
-            # 2. Lưu vào SQL (Bổ sung face_url và face_public_id)
+            # 2. Lưu thông tin người dùng vào SQL
             cur.execute(
                 "INSERT INTO parking_users (face_id, full_name, family_id, role, face_url, face_public_id) VALUES (%s, %s, %s, 'resident', %s, %s) RETURNING user_id",
                 (face_id, full_name, family_id, face_url, face_public_id)
@@ -189,7 +190,7 @@ class DatabaseManager:
             self.pg_conn.commit()
             cur.close()
 
-            # 3. Lưu vào Qdrant (PAYLOAD SẠCH SẼ - KHÔNG CÓ BIỂN SỐ)
+            # 3. Lưu vector đặc trưng vào Qdrant
             self.qdrant_client.upsert(
                 collection_name=self.collection_name,
                 points=[models.PointStruct(

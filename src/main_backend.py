@@ -23,6 +23,7 @@ import cloudinary.uploader
 import threading
 
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "system.env"))
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env"))
 
 # Cloudinary Setup
 cloudinary.config(
@@ -80,7 +81,7 @@ PLATE_API_URL = os.getenv("PLATE_API_URL", "http://localhost:8001")
 FACE_API_URL = os.getenv("FACE_API_URL", "http://localhost:8002")
 
 db_manager = DatabaseManager()
-# Ở chế độ hybrid, ta chỉ kiểm tra kết nối, không tự tạo bảng
+# Khởi tạo kết nối cơ sở dữ liệu
 db_manager.init_db()
 
 # --- CLOUDINARY LOGGING TASK ---
@@ -93,7 +94,7 @@ def archive_images(plate_text, name, session_id=None):
             face_pid = None
             plate_pid = None
             
-            # Đã bổ sung thư mục con storage để phân loại ảnh giao dịch
+            # Phân loại ảnh theo thư mục ngày tháng
             folder = datetime.now().strftime("smart_parking/storage/%d-%m-%Y")
             
             # 1. Upload ảnh khuôn mặt
@@ -278,7 +279,7 @@ def get_logs(limit: int = 50):
 
         logs = []
         for r in rows:
-            # 🔴 BỘ DỊCH THUẬT TIẾNG VIỆT
+            # Chuyển đổi mã trạng thái sang tiếng Việt
             raw_status = r[3]
             vn_status = raw_status
             if raw_status == "SUCCESS": vn_status = "THÀNH CÔNG"
@@ -451,7 +452,7 @@ async def upload_mobile_plate(payload: MobilePayload):
         lane = payload.lane.upper()
         write_debug(f"Nhận ảnh từ Mobile cho làn {lane}. Đang chạy pipeline...")
 
-        # 🔴 BẢN VÁ: CHỈ GỌI API AI ĐỌC BIỂN SỐ 1 LẦN DUY NHẤT Ở ĐÂY
+        # Nhận diện biển số xe qua OCR Service
         res = await run_ai_pipeline_legacy(frame, source="MOBILE", lane=lane)
         
         if res.get("status") == "success":
@@ -580,9 +581,7 @@ async def scan_face_webcam(payload: FacePayload):
         _, buffer = cv2.imencode('.jpg', frame)
         face_base64 = base64.b64encode(buffer).decode('utf-8')
 
-        # [DEMO DELAY] Giả lập phân tích chuyên sâu để thầy cô kịp theo dõi
         await update_state("ĐỐI SOÁT", "Đang trích xuất đặc trưng khuôn mặt...", plate=plate_text, lane=lane)
-        # await asyncio.sleep(1.5) # Xóa delay để chạy thực tế mượt mà hơn
         
         # Gọi Face API thực tế
         loop = asyncio.get_event_loop()
@@ -618,7 +617,7 @@ async def scan_face_webcam(payload: FacePayload):
             score_pct = f"{match.score:.0%}" if match else "N/A"
             write_debug(f"⚠️ [VÙNG VÀNG] Khuôn mặt {db_name} | Điểm: {match.score:.3f} ({score_pct}) - Yêu cầu bảo vệ xác nhận!")
 
-            # 🔴 BẢN VÁ BẢO MẬT: Bắt buộc kiểm tra sở hữu NGAY CẢ TRONG VÙNG VÀNG
+            # Kiểm tra quyền sở hữu phương tiện trong ngưỡng xác nhận
             if lane == "OUT" and match:
                 is_owner = db_manager.check_user_access(match.id, plate_text)
                 if not is_owner:
@@ -689,7 +688,6 @@ async def scan_face_webcam(payload: FacePayload):
                     db_manager.log_event(sess_id, target_user_id, plate_text, match.score, "CHECK_OUT", "FAILED_WRONG_OWNER")
                     await update_state("TỪ CHỐI", "SAI CHỦ TÀI SẢN", plate=plate_text, name=db_name, msg="Bạn không phải người gửi chiếc xe này!", lane=lane, time_str=curr_time)
                     
-                    # 🔴 BỔ SUNG 2 DÒNG NÀY ĐỂ HIỆN LÊN WEB VÀ LƯU ẢNH BẰNG CHỨNG
                     archive_images(plate_text, db_name, session_id=sess_id)
                     notify_log_update()
                     
@@ -718,7 +716,6 @@ async def scan_face_webcam(payload: FacePayload):
                     msg=f"Khuôn mặt chưa từng vào bãi! (Max match: {best_score})",
                     lane=lane, time_str=curr_time)
                 
-                # 🔴 BỔ SUNG 2 DÒNG NÀY ĐỂ HIỆN LÊN WEB VÀ LƯU ẢNH BẰNG CHỨNG
                 archive_images(plate_text, "Kẻ_gian", session_id=sess_id)
                 notify_log_update()
                 
@@ -803,7 +800,7 @@ async def manual_approve(lane: str, session_id: str, payload: ManualApprovePaylo
     if payload.action == "approve":
         write_debug(f"✅ [THỦ CÔNG] XÁC NHẬN mở cửa cho {db_name} (biển {plate_text})")
         
-        # 🔴 [BẢN VÁ]: Cập nhật Biển số nếu Xác nhận ĐÚNG NGƯỜI ở Làn VÀO
+        # Cập nhật thông tin biển số khi phê duyệt làn vào
         if lane == "IN":
             plate_family_id = db_manager.get_family_by_plate(plate_text)
             if plate_family_id is None:
@@ -846,7 +843,7 @@ async def manual_approve(lane: str, session_id: str, payload: ManualApprovePaylo
         return {"status": "retry"}
         
     else:
-        # 🔴 [BẢN VÁ LỚN]: Phân rẽ 2 luồng TỪ CHỐI khác nhau hoàn toàn cho 2 làn
+        # Xử lý trường hợp từ chối theo từng làn (IN / OUT)
         if lane == "IN":
             # ---> TẠO MỚI KHÁCH VÃNG LAI
             write_debug(f"👤 [THỦ CÔNG] Bảo vệ xác nhận KHÁCH MỚI cho biển {plate_text}. Đang tạo dữ liệu...")
@@ -953,7 +950,6 @@ async def run_ai_pipeline_legacy(frame, source="LOCAL", lane="ALL"):
         legacy_sess_id = f"local_{int(time.time())}_{str(uuid.uuid4())[:4]}"
         if match:
             db_name = match.payload.get("name", "Unknown")
-            # Sửa lỗi: truyền đủ tham số theo đúng signature của log_event()
             db_manager.log_event(legacy_sess_id, match.id, plate_text, match.score, "CHECK", "SUCCESS")
             await update_state("THÀNH CÔNG", "XÁC THỰC OK", plate_text, db_name, curr_time, f"Chào {db_name}!", lane=lane)
             archive_images(plate_text, db_name)
@@ -976,18 +972,18 @@ class FamilyRegistration(BaseModel):
     owner_name: str
     plates: List[str]
     members: List[MemberInfo]
-    monthly_fee: int = 0  # <--- Bổ sung dòng này
+    monthly_fee: int = 0  # Phí gửi xe theo tháng của hộ
 
 @app.post("/api/admin/register-family")
 async def register_family(data: FamilyRegistration):
     try:
         write_debug(f"=== BẮT ĐẦU ĐĂNG KÝ HỘ GIA ĐÌNH: {data.room_number} ===")
-        # Sửa lỗi: luôn đảm bảo kết nối PG còn sống trước khi dùng
+        # Đảm bảo kết nối cơ sở dữ liệu
         if not db_manager.ensure_pg_connection():
             return {"status": "error", "message": "Không thể kết nối đến Database!"}
         cur = db_manager.pg_conn.cursor()
 
-        # 🔴 [BẢN VÁ DỌN RÁC]: Tự động dọn hộ cũ bị bỏ hoang do xóa riêng lẻ trước đó
+        # Tự động dọn hộ cũ không còn phương tiện liên kết
         cur.execute("SELECT family_id FROM families WHERE UPPER(room_number) = %s", (data.room_number.strip().upper(),))
         existing_rooms = cur.fetchall()
         for r_id in existing_rooms:
@@ -1035,7 +1031,6 @@ async def register_family(data: FamilyRegistration):
                 # Ngưỡng 0.75 — đồng bộ với ngưỡng xác thực chính để nhất quán
                 match = db_manager.search_face(vector, threshold=0.75)
                 if match:
-                    # Sửa lỗi SQL: parking_users không có cột room_number, phải JOIN với families
                     cur.execute("""
                         SELECT f.room_number, u.face_url 
                         FROM parking_users u

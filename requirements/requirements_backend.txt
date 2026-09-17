@@ -7,3 +7,5 @@ psycopg2-binary
 numpy
 qdrant-client
 protobuf==3.19.6
+cloudinary
+opencv-python

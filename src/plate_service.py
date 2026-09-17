@@ -9,8 +9,9 @@ from paddleocr import PaddleOCR
 import re
 
 import time
+from dotenv import load_dotenv
 
-# --- PADDLE STABILITY PATCH ---
+# Cấu hình PaddleOCR
 import paddle
 if not hasattr(paddle.distributed, 'get_rank'):
     paddle.distributed.get_rank = lambda: 0
@@ -22,6 +23,8 @@ os.environ['PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK'] = 'True'
 
 # Logging paths
 ROOT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+load_dotenv(os.path.join(ROOT_DIR, "system.env"))
+load_dotenv(os.path.join(ROOT_DIR, ".env"))
 DEBUG_LOG_FILE = os.path.join(ROOT_DIR, "logs", "debug_plate.txt")
 ERROR_LOG_FILE = os.path.join(ROOT_DIR, "logs", "error_log.txt")
 
@@ -48,7 +51,7 @@ app = FastAPI(title="Plate API (YOLO + PaddleOCR)")
 # Load models at startup
 MODEL_YOLO_PATH = os.path.join(ROOT_DIR, "models", "best.pt")
 PADDING = 40
-YOLO_CONF = 0.35 # Giảm từ 0.5 xuống 0.35 để nhạy hơn
+YOLO_CONF = 0.35  # Ngưỡng tin cậy detection
 
 print("--- Initializing AI Models ---")
 try:
@@ -78,7 +81,7 @@ class ImagePayload(BaseModel):
 
 def apply_vn_custom_rules(fp, fs, fn):
     DIGIT_FIX = {'B':'8', 'S':'5', 'G':'6', 'D':'0', 'O':'0', 'Q':'0', 'Z':'2', 'A':'4', 'T':'7'}
-    # Bổ sung thêm các lỗi AI hay nhầm nét (Thêm 1->I, 3->B, 9->P)
+    # Bảng ánh xạ chuẩn hóa ký tự OCR thường gặp sai sót nét
     LETTER_FIX = {'8':'B', '5':'S', '0':'D', '2':'Z', '4':'A', '6':'G', '7':'T', '1':'I', '3':'B'} 
     
     # 1. Mã Tỉnh (fp) - BẮT BUỘC LÀ SỐ
@@ -91,7 +94,7 @@ def apply_vn_custom_rules(fp, fs, fn):
     fs_chars = list(fs)
     if len(fs_chars) > 0:
         if fs_chars[0] in LETTER_FIX: fs_chars[0] = LETTER_FIX[fs_chars[0]]
-        # Nếu AI vẫn ngoan cố đọc là số 9, ép cứng đổi thành P
+        # Ký tự đầu seri nếu nhận diện nhầm thành số 9 thì chuẩn hóa về P
         if fs_chars[0] == '9': fs_chars[0] = 'P'
         
     # Ký tự thứ 2 của seri (nếu có) có thể là Số (D1) hoặc Chữ (AB) -> ĐỂ NGUYÊN
@@ -109,8 +112,7 @@ def apply_ocr_tiers(img_crop):
     h, w = img_crop.shape[:2]
     scale = 2.5
     base = cv2.resize(img_crop, (int(w*scale), int(h*scale)), interpolation=cv2.INTER_LANCZOS4)
-    # Ngưỡng lọc noise: Bỏ qua fragment nằm quá thấp (>90% chiều cao ảnh đã scale)
-    # Sửa lỗi: dùng giá trị động thay vì hard-code 1100 (phụ thuộc độ phân giải)
+    # Ngưỡng lọc nhiễu: Bỏ qua fragment nằm quá thấp (>90% chiều cao ảnh đã scale)
     max_cy = h * scale * 0.90
     all_fragments = []
     tiers = {
@@ -186,7 +188,7 @@ def predict(payload: ImagePayload):
             loc = 1 if cy < mid_y else 2
             
             if loc == 2:
-                # Làn dưới: Sửa regex [0-9A-Z] để chấp nhận lọt chữ (để hàm Fix phía trên gọt lại thành số)
+                # Dòng dưới: trích xuất cụm số và chuẩn hóa
                 num_m = re.search(r'[0-9A-Z]{4,5}', txt)
                 if num_m:
                     num = num_m.group()
@@ -197,11 +199,11 @@ def predict(payload: ImagePayload):
                 if len(clean_top) >= 4:
                     p_sc[clean_top[:2]] = max(p_sc.get(clean_top[:2], 0), conf + 100)
                     s_sc[clean_top[2:4]] = max(s_sc.get(clean_top[2:4], 0), conf + 100)
-                elif len(clean_top) == 3: # 🔴 BẢN VÁ: Xử lý khi rớt 1 ký tự (VD: 85D)
+                elif len(clean_top) == 3:  # Xử lý trường hợp dòng trên 3 ký tự (VD: 85D)
                     p_sc[clean_top[:2]] = max(p_sc.get(clean_top[:2], 0), conf + 90)
                     s_sc[clean_top[2:]] = max(s_sc.get(clean_top[2:], 0), conf + 90)
                 elif len(clean_top) <= 2 and len(clean_top) > 0:
-                    if any(c.isdigit() for c in clean_top): # Mềm mỏng hơn
+                    if any(c.isdigit() for c in clean_top):
                         p_sc[clean_top] = max(p_sc.get(clean_top, 0), conf + 80)
                     else: 
                         s_sc[clean_top] = max(s_sc.get(clean_top, 0), conf + 80)
@@ -210,13 +212,11 @@ def predict(payload: ImagePayload):
         fs = sorted(s_sc.items(), key=lambda x: x[1], reverse=True)[0][0] if s_sc else "??"
         fn = sorted(n_sc.items(), key=lambda x: x[1], reverse=True)[0][0] if n_sc else "?????"
         
-        # Ghi chú: Hard-code sửa biển đã xóa (không tổng quát, gây nhầm lẫn)
-        
-        # 🔴 Gọi hàm Fix mới phân tách rõ ràng 3 cụm
+        # Chuẩn hóa và sửa lỗi từng cụm biển số
         fp_fix, fs_fix, fn_fix = apply_vn_custom_rules(fp, fs, fn)
         raw_combined = f"{fp_fix}{fs_fix}{fn_fix}"
         
-        # Format biển số siêu chuẩn xác
+        # Định dạng chuẩn biển số xe
         pretty_plate = f"{fp_fix}-{fs_fix} {fn_fix}"
         if len(fn_fix) == 5:
             pretty_plate = f"{fp_fix}-{fs_fix} {fn_fix[:3]}.{fn_fix[3:]}"

@@ -1,0 +1,13 @@
+{
+    "Servers": {
+        "1": {
+            "Name": "Smart Parking",
+            "Group": "Servers",
+            "Host": "parking_db",
+            "Port": 5432,
+            "MaintenanceDB": "smart_parking",
+            "Username": "parking_admin",
+            "SSLMode": "prefer"
+        }
+    }
+}

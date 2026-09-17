@@ -20,6 +20,7 @@ temp_*/
 *.jpg
 *.png
 *.pt
+!models/best.pt
 
 # IDE
 .vscode/
@@ -38,5 +39,3 @@ system.env
 # Archive & temp
 _archive_/
 
-# servers config (local)
-servers.json

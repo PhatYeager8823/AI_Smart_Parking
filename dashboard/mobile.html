@@ -258,7 +258,7 @@
             document.getElementById('send-out-btn').disabled = true;
             retryBtn.disabled = true;
 
-            // Sửa lỗi: thêm timeout 15 giây để tránh chờ vô hạn nếu server không phản hồi
+            // Giới hạn thời gian chờ request (15 giây)
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 15000);
 
@@ -275,7 +275,7 @@
                 if(data.status === 'success') {
                     statusMsg.innerHTML = `<i class="fas fa-check-circle"></i> THÀNH CÔNG!`;
                     statusMsg.style.color = "#10b981";
-                    // Tăng delay lên 3 giây (3000ms) để tránh quét nhầm biển cũ
+                    // Giãn cách thời gian giữa các lượt quét
                     setTimeout(() => { resetUI(); }, 3000); 
                 } else {
                     statusMsg.innerText = "❌ Lỗi: " + data.message;

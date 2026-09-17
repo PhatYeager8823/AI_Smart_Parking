@@ -7,10 +7,10 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700;800&display=swap" rel="stylesheet">
     <style>
-        /* Đã xóa overflow: hidden để cho phép cuộn dọc */
+        /* Bố cục toàn trang */
         body, html { margin: 0; padding: 0; background: #0f172a; color: #fff; font-family: 'Nunito', sans-serif; overflow-x: hidden; overflow-y: auto; }
         
-        /* Đổi height thành min-height để khung có thể giãn ra, thêm margin-bottom cho thoáng */
+        /* Khung hiển thị hai làn xe */
         .dual-container { display: flex; min-height: 550px; gap: 20px; padding: 0 20px; margin-bottom: 20px; }
         .lane-col { flex: 1; display: flex; flex-direction: column; background: rgba(30, 41, 59, 0.4); border-radius: 20px; padding: 20px; border: 1px solid rgba(255,255,255,0.05); overflow-y: auto; }
         .header-bar { display: flex; justify-content: space-between; align-items: center; padding: 20px; background: rgba(15, 23, 42, 0.8); border-bottom: 1px solid #334155; }
@@ -25,11 +25,11 @@
         /* CSS cho khung bằng chứng mới */
         .evidence-box { display: flex; gap: 15px; margin-top: 15px; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 12px; border: 1px solid #334155; }
         .evidence-item { flex: 1; display: flex; flex-direction: column; align-items: center; }
-        /* 2. Đổi cover thành contain để không bị xén mất tóc và cằm */
+        /* Khung ảnh bằng chứng */
         .evidence-img { width: 100%; height: 160px; object-fit: contain; border-radius: 8px; border: 1px solid #38bdf8; background: #000; }
         .evidence-img.plate { background: #fff; border-color: #10b981; }
         
-        /* 1. Trả lại chiều cao 450px cho Camera */
+        /* Khung hiển thị camera */
         .cam-container { position: relative; border-radius: 16px; overflow: hidden; background: #000; border: 2px solid #334155; height: 450px; display: flex; justify-content: center; align-items: center; margin-bottom: 15px; }
         video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
         .queue-wrapper { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px; min-height: 40px; }
@@ -45,8 +45,8 @@
         .fee-box { grid-column: span 2; background: rgba(245, 158, 11, 0.15); border: 1px dashed #f59e0b; padding: 10px; border-radius: 8px; text-align: center; }
         .fee-amount { font-size: 1.5rem; font-weight: 900; color: #fbbf24; }
         
-        /* 🔴 BẢN VÁ: Cố định Header Bảng Nhật ký */
-        .global-logs { height: 200px; overflow-y: auto; background: rgba(15, 23, 42, 0.9); border-top: 1px solid #334155; padding: 0 20px; /* Đã xóa padding-top để header dính sát mép */ }
+        /* Bảng nhật ký hoạt động */
+        .global-logs { height: 200px; overflow-y: auto; background: rgba(15, 23, 42, 0.9); border-top: 1px solid #334155; padding: 0 20px; }
         table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
         th, td { padding: 12px 8px; text-align: left; border-bottom: 1px solid #334155; }
         th { 
@@ -56,7 +56,7 @@
             box-shadow: 0 1px 0 #334155; /* Vẽ đường kẻ giả dưới header */
         }
         
-    /* CSS CHO MODAL VÙNG VÀNG (ĐÃ TỐI ƯU CHO KHUNG CAMERA) */
+    /* Modal xác nhận bảo vệ */
     .yz-overlay {
         display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
         background: rgba(15, 23, 42, 0.95); z-index: 1000; justify-content: center; align-items: center;
@@ -320,7 +320,7 @@
             if (log.children.length > 100) log.lastChild.remove(); // Giới hạn 100 dòng
         }
 
-        // 🔴 BẢN VÁ: HÀM TẠO ÂM THANH BÍP (KHÔNG CẦN FILE MP3)
+        // Hàm phát âm thanh hiệu ứng (Web Audio API)
         function playAudioTone(frequency, type, duration) {
             try {
                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -347,7 +347,7 @@
             document.getElementById('imageViewer').style.display = 'flex';
         };
 
-        // 🔴 BẢN VÁ: HÀM TẠO TOAST TRƯỢT TỪ PHẢI QUA
+        // Toast thông báo trạng thái
         function showToast(title, message, type = 'info') {
             const container = document.getElementById('toast-container');
             if(!container) return;
@@ -449,11 +449,11 @@
         window.activateVehicle = async (lane, sid) => {
             L[lane].activeId = sid;
             
-            // 🔴 BẢN VÁ QUAN TRỌNG: Xóa trạng thái "Đang bận" của xe cũ
+            // Đặt lại trạng thái xử lý cho xe mới
             L[lane].isProc = false;
             L[lane].stab = 0;
             
-            // 🔴 BẢN VÁ: TỰ ĐỘNG BẬT CAMERA KHI CÓ XE VÀO HÀNG ĐỢI
+            // Tự động kích hoạt camera khi có xe vào hàng đợi
             if (!L[lane].stream) {
                 await startCam(lane);
             }
@@ -480,10 +480,10 @@
                     updateUI(lane, { action: "SẴN SÀNG", message: "Đang chờ xe...", plate: "---" });
                     document.getElementById(`reticle-${lane}`).style.display = 'none';
                     
-                    // 🔴 BẢN VÁ: TẮT NGUỒN CAMERA ĐỂ TIẾT KIỆM TÀI NGUYÊN
+                    // Dừng camera khi hàng đợi trống
                     stopCam(lane); 
                 } else {
-                    activateVehicle(lane, L[lane].activeId); // Bốc xe tiếp theo lên
+                    activateVehicle(lane, L[lane].activeId);
                 }
             }
             renderQueue(lane);
@@ -526,12 +526,12 @@
 
             dbg(`updateUI làn ${lane}: action="${state.action}" status="${state.status}" plate="${state.plate}"`, 'info');
 
-            // 🔴 PHÂN LOẠI: Từ chối TẠM THỜI (không thấy mặt) vs. THẬT SỰ (sai chủ/kẻ gian)
+            // Phân loại từ chối tạm thời (chưa phát hiện mặt) vs. Từ chối xác thực
             const softRejectStatuses = ["KHÔNG THẤY MẶT", "NO_FACE", "no_face"];
             const isSoftReject = state.action === "TỪ CHỐI" && softRejectStatuses.includes(state.status);
 
             if (isSoftReject) {
-                // ⚡ TỪ CHỐI TẠM THỜI: Chỉ phát tiếng cảnh báo nhẹ, KHÔNG tắt camera, KHÔNG kết thúc phiên
+                // Từ chối tạm thời: phát âm báo nhẹ và tiếp tục quét
                 dbg(`⚠️ TỪ CHỐI TẠM THỜI (${state.status}) làn ${lane} - Giữ camera, cho quét lại`, 'warn');
                 playAudioTone(600, 'triangle', 0.3); // Tiếng bíp ngắn nhẹ
                 showToast(`CHƯA NHẬN DIỆN - LÀN ${lane}`, state.message || 'Hãy nhìn thẳng vào camera!', 'warning');
@@ -541,8 +541,8 @@
                 return; // Dừng tại đây, KHÔNG tắt camera
             }
 
-            // Danh sách trạng thái kết thúc phiên THẬT SỰ (Thành công hoặc Thất bại bảo mật)
-            const terminalActions = ["SUCCESS", "THÀNH CÔNG", "TỪ CHỐI", "LỖI", "ERROR", "THẤT BẠI"]; // "CẦN XÁC NHẬN" đã bỏ ra khỏi danh sách
+            // Danh sách trạng thái kết thúc phiên (Thành công hoặc Thất bại)
+            const terminalActions = ["SUCCESS", "THÀNH CÔNG", "TỪ CHỐI", "LỖI", "ERROR", "THẤT BẠI"];
             
             if (terminalActions.includes(state.action) || state.status === "security_reject" || state.action === "CẢNH BÁO") {
                 const colElement = document.getElementById(`col-${lane.toLowerCase()}`);
@@ -636,7 +636,6 @@
             canvas.width = video.videoWidth; canvas.height = video.videoHeight;
             canvas.getContext('2d').drawImage(video, 0, 0);
 
-            // 🔴 SỬA TÊN ID CHỖ NÀY
             document.getElementById(`evidence-face-${lane}`).src = canvas.toDataURL('image/jpeg', 0.8);
 
             try {
@@ -655,7 +654,7 @@
             const res = await fetch('/api/logs?t=' + Date.now());
             const data = await res.json();
             document.querySelector('#logs-table tbody').innerHTML = data.slice(0,10).map(log => {
-                // 🔴 Thêm class cursor:pointer và sự kiện onclick="showImage('url')"
+                // Hiển thị ảnh kèm xem chi tiết
                 const faceImg = log.face_url ? `<img src="${log.face_url}" onclick="showImage('${log.face_url}')" title="Bấm để xem ảnh gốc" style="height:35px; width:35px; object-fit:cover; border-radius:5px; margin-right:5px; cursor:zoom-in;">` : '';
                 
                 const plateImg = log.plate_url ? `<img src="${log.plate_url}" onclick="showImage('${log.plate_url}')" title="Bấm để xem ảnh gốc" style="height:35px; width:70px; object-fit:contain; background:#fff; border-radius:5px; cursor:zoom-in;">` : '';
