@@ -8,7 +8,11 @@ echo ===================================================
 echo.
 
 echo [1/3] Dang xoa cac Container Docker (Don dep sach)...
-docker-compose --env-file system.env down
+if exist system.env (
+    docker compose --env-file system.env down
+) else (
+    docker compose down
+)
 echo.
 
 echo [2/3] Dang tat cac dich vu AI (Python)...
